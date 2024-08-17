@@ -168,7 +168,7 @@ if __name__ == '__main__':
                             if s3_url is not None:
                                 subject = ""
                                 if "report_name" in jobs[i]:
-                                    subject = subject + str(jobs[i]) + " is ready to download"
+                                    subject = subject + str(jobs[i]["report_name"]) + " is ready to download"
                                 else:
                                     subject = "Report ready to download"
 
