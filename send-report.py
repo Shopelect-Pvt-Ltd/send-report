@@ -11,6 +11,8 @@ from pymongo import MongoClient
 import boto3
 import requests
 from sendgrid.helpers.mail import Mail
+from openpyxl import load_workbook
+from openpyxl.styles import Font, PatternFill
 
 logging.basicConfig(
     level=logging.INFO,
@@ -98,7 +100,6 @@ def uploadFile(filename):
             os.remove(filename)
         return None
 
-
 def getData(wsname):
     logging.info("getData called...")
     all_data = []
@@ -115,11 +116,33 @@ def getData(wsname):
             column_names = [desc[0] for desc in cursor.description]
             for row in results:
                 all_data.append(row)
-        df = pd.DataFrame(all_data, columns=column_names)
-        df.to_excel(filename, index=False, engine='openpyxl')
-        total_records = total_records + len(df)
-    return filename, total_records
 
+        df = pd.DataFrame(all_data, columns=column_names)
+
+        # Convert columns to numeric datatype where possible
+        for col in df.columns:
+            try:
+                df[col] = pd.to_numeric(df[col])
+            except ValueError:
+                pass  # If conversion fails, keep the original data
+
+        df.to_excel(filename, index=False, engine='openpyxl')
+
+        # Open the workbook and select the active worksheet
+        wb = load_workbook(filename)
+        ws = wb.active
+
+        # Set header style (font size 12, yellow fill)
+        for cell in ws[1]:
+            cell.font = Font(size=12, bold=True)
+            cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+
+        # Save the changes
+        wb.save(filename)
+
+        total_records = total_records + len(df)
+
+    return filename, total_records
 
 def getWorkspaceName(workspaceids):
     logging.info("getWorkspaceName called...")
