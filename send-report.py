@@ -125,10 +125,10 @@ def getData(wsname):
                 except ValueError:
                     pass  # If conversion fails, keep the original data
 
-            # Split data into chunks of 50,000 rows
-            for chunk_num, chunk in enumerate(range(0, len(df), 50000)):
-                sheet_name = f"{wsname[i]}_{chunk_num + 1}"
-                df_chunk = df.iloc[chunk:chunk + 50000]
+            # Split data into chunks of 10,000 rows
+            for chunk_num, chunk in enumerate(range(0, len(df), 10000)):
+                sheet_name = f"Sheet{chunk_num + 1}"
+                df_chunk = df.iloc[chunk:chunk + 10000]
                 df_chunk.to_excel(writer, sheet_name=sheet_name, index=False)
 
                 # Open the workbook to format the header
