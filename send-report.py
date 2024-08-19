@@ -102,46 +102,47 @@ def uploadFile(filename):
 
 def getData(wsname):
     logging.info("getData called...")
-    all_data = []
     filename = '_'.join(wsname) + "_" + str(currtime) + ".xlsx"
     total_records = 0
-    for i in range(len(wsname)):
-        with pgconn.cursor() as cursor:
-            select_query = "SELECT * FROM mmt_flight_recon WHERE \"Customer_Name\" ILIKE %s"
-            logging.info("Query: " + str(select_query))
-            logging.info("Param: " + str(wsname[i]))
-            cursor.execute(select_query, (wsname[i],))
-            results = cursor.fetchall()
-            logging.info("No. of record: " + str(len(results)))
-            column_names = [desc[0] for desc in cursor.description]
-            for row in results:
-                all_data.append(row)
 
-        df = pd.DataFrame(all_data, columns=column_names)
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        for i in range(len(wsname)):
+            with pgconn.cursor() as cursor:
+                select_query = "SELECT * FROM mmt_flight_recon WHERE \"Customer_Name\" ILIKE %s"
+                logging.info("Query: " + str(select_query))
+                logging.info("Param: " + str(wsname[i]))
+                cursor.execute(select_query, (wsname[i],))
+                results = cursor.fetchall()
+                logging.info("No. of record: " + str(len(results)))
+                column_names = [desc[0] for desc in cursor.description]
 
-        # Convert columns to numeric datatype where possible
-        for col in df.columns:
-            try:
-                df[col] = pd.to_numeric(df[col])
-            except ValueError:
-                pass  # If conversion fails, keep the original data
+            df = pd.DataFrame(results, columns=column_names)
 
-        df.to_excel(filename, index=False, engine='openpyxl')
+            # Convert columns to numeric datatype where possible
+            for col in df.columns:
+                try:
+                    df[col] = pd.to_numeric(df[col])
+                except ValueError:
+                    pass  # If conversion fails, keep the original data
 
-        # Open the workbook and select the active worksheet
-        wb = load_workbook(filename)
-        ws = wb.active
+            # Split data into chunks of 50,000 rows
+            for chunk_num, chunk in enumerate(range(0, len(df), 50000)):
+                sheet_name = f"{wsname[i]}_{chunk_num + 1}"
+                df_chunk = df.iloc[chunk:chunk + 50000]
+                df_chunk.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        # Set header style (font size 12, yellow fill)
-        for cell in ws[1]:
-            cell.font = Font(size=12, bold=True)
-            cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                # Open the workbook to format the header
+                wb = writer.book
+                ws = wb[sheet_name]
 
-        # Save the changes
-        wb.save(filename)
+                # Set header style (font size 12, yellow fill)
+                for cell in ws[1]:
+                    cell.font = Font(size=12, bold=True)
+                    cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
 
-        total_records = total_records + len(df)
+                total_records += len(df_chunk)
 
+    logging.info(f"Total records written: {total_records}")
     return filename, total_records
 
 def getWorkspaceName(workspaceids):
