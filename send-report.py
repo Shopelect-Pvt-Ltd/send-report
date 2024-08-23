@@ -138,7 +138,7 @@ def getData(wsname):
                 # Set header style (font size 12, yellow fill)
                 for cell in ws[1]:
                     cell.font = Font(size=12, bold=True)
-                    cell.fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                    cell.fill = PatternFill(start_color="f5f6f9", end_color="f5f6f9", fill_type="solid")
 
                 total_records += len(df_chunk)
 
