@@ -11,8 +11,8 @@ from pymongo import MongoClient
 import boto3
 import requests
 from sendgrid.helpers.mail import Mail
-from openpyxl import load_workbook
 from openpyxl.styles import Font, PatternFill
+import hashlib
 
 logging.basicConfig(
     level=logging.INFO,
@@ -99,52 +99,67 @@ def uploadFile(filename):
         if os.path.exists(filename):
             os.remove(filename)
         return None
+
+
+def findFileHash(file_path, hash_algo='sha256'):
+    hash_func = hashlib.new(hash_algo)
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_func.update(chunk)
+    return hash_func.hexdigest()
+
+
 def getData(tablename, wsname):
-    logging.info("getData called...")
-    filename = '_'.join(wsname) + "_" + str(currtime) + ".xlsx"
-    total_records = 0
+    try:
+        logging.info("getData called...")
+        filename = '_'.join(wsname) + "_" + str(currtime) + ".xlsx"
+        total_records = 0
 
-    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
-        for i in range(len(wsname)):
-            with pgconn.cursor() as cursor:
-                select_query = f"SELECT * FROM {tablename} WHERE \"Workspace\" ILIKE %s"
-                logging.info("Query: " + str(select_query))
-                logging.info("Param: " + str(wsname[i]))
-                cursor.execute(select_query, (wsname[i],))
-                results = cursor.fetchall()
-                if results is None or len(results) == 0:
-                    continue
-                logging.info("No. of record: " + str(len(results)))
-                column_names = [desc[0] for desc in cursor.description]
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            for i in range(len(wsname)):
+                with pgconn.cursor() as cursor:
+                    select_query = f"SELECT * FROM {tablename} WHERE \"Workspace\" ILIKE %s"
+                    logging.info("Query: " + str(select_query))
+                    logging.info("Param: " + str(wsname[i]))
+                    cursor.execute(select_query, (wsname[i],))
+                    results = cursor.fetchall()
+                    if results is None or len(results) == 0:
+                        continue
+                    logging.info("No. of record: " + str(len(results)))
+                    column_names = [desc[0] for desc in cursor.description]
 
-            df = pd.DataFrame(results, columns=column_names)
+                df = pd.DataFrame(results, columns=column_names)
 
-            # Convert columns to numeric datatype where possible
-            for col in df.columns:
-                try:
-                    df[col] = pd.to_numeric(df[col])
-                except ValueError:
-                    pass  # If conversion fails, keep the original data
+                # Convert columns to numeric datatype where possible
+                for col in df.columns:
+                    try:
+                        df[col] = pd.to_numeric(df[col])
+                    except ValueError:
+                        pass  # If conversion fails, keep the original data
 
-            # Split data into chunks of 10,000 rows
-            for chunk_num, chunk in enumerate(range(0, len(df), 10000)):
-                sheet_name = f"Sheet{chunk_num + 1}"
-                df_chunk = df.iloc[chunk:chunk + 10000]
-                df_chunk.to_excel(writer, sheet_name=sheet_name, index=False)
+                # Split data into chunks of 10,000 rows
+                for chunk_num, chunk in enumerate(range(0, len(df), 10000)):
+                    sheet_name = f"Sheet{chunk_num + 1}"
+                    df_chunk = df.iloc[chunk:chunk + 10000]
+                    df_chunk.to_excel(writer, sheet_name=sheet_name, index=False)
 
-                # Open the workbook to format the header
-                wb = writer.book
-                ws = wb[sheet_name]
+                    # Open the workbook to format the header
+                    wb = writer.book
+                    ws = wb[sheet_name]
 
-                # Set header style (font size 12, yellow fill)
-                for cell in ws[1]:
-                    cell.font = Font(size=12, bold=True)
-                    cell.fill = PatternFill(start_color="f5f6f9", end_color="f5f6f9", fill_type="solid")
+                    # Set header style (font size 12, yellow fill)
+                    for cell in ws[1]:
+                        cell.font = Font(size=12, bold=True)
+                        cell.fill = PatternFill(start_color="f5f6f9", end_color="f5f6f9", fill_type="solid")
 
-                total_records += len(df_chunk)
+                    total_records += len(df_chunk)
+        filehash = findFileHash(filename)
+        logging.info(f"Total records written: {total_records}")
+        return filename, total_records, filehash
+    except Exception as e:
+        logging.info("Exception happened in the getData: " + str(e))
+        return None, None, None
 
-    logging.info(f"Total records written: {total_records}")
-    return filename, total_records
 
 def getWorkspaceName(workspaceids):
     logging.info("getWorkspaceName called...")
@@ -163,6 +178,7 @@ def removeFile(filename):
     logging.info("removeFile called...")
     if os.path.exists(filename):
         os.remove(filename)
+
 
 def getPendingJob():
     logging.info("getPendingJob called...")
@@ -189,10 +205,25 @@ if __name__ == '__main__':
                     workspacename = getWorkspaceName(jobs[i]['workspace_id'])
                     logging.info("Workspace Names: " + str(workspacename))
                     if workspacename is not None and len(workspacename) != 0:
-                        filename, count = getData(jobs[i]['table_name'], workspacename)
+                        filename, count, filehash = getData(jobs[i]['table_name'], workspacename)
                         logging.info("Filename: " + str(filename))
                         logging.info("Total no. of records: " + str(count))
-                        if count != 0:
+                        if count is None:
+                            key_to_check = {"_id": jobs[i]["_id"]}
+                            result = collection.update_one(
+                                key_to_check,
+                                {
+                                    "$set": {
+                                        "status": "EXCEPTION IN GETDATA",
+                                        "total_record": 0
+                                    }
+                                })
+                            if result.matched_count > 0:
+                                logging.info("Updated the document: " + str(key_to_check))
+                            else:
+                                logging.info("No updates for the document: " + str(key_to_check))
+
+                        elif count != 0:
                             s3_url = uploadFile(filename)
                             logging.info("S3 URL: " + str(s3_url))
                             if s3_url is not None:
@@ -220,7 +251,8 @@ if __name__ == '__main__':
                                             "$set": {
                                                 "status": "COMPLETED",
                                                 "link": s3_url,
-                                                "total_record": count
+                                                "total_record": count,
+                                                "filehash": filehash
                                             }
                                         })
                                     if result.matched_count > 0:
@@ -255,7 +287,7 @@ if __name__ == '__main__':
                                     logging.info("Updated the document: " + str(key_to_check))
                                 else:
                                     logging.info("No updates for the document: " + str(key_to_check))
-                        else:
+                        elif count == 0:
                             key_to_check = {"_id": jobs[i]["_id"]}
                             result = collection.update_one(
                                 key_to_check,
@@ -269,6 +301,7 @@ if __name__ == '__main__':
                                 logging.info("Updated the document: " + str(key_to_check))
                             else:
                                 logging.info("No updates for the document: " + str(key_to_check))
+
                         removeFile(filename)
                     else:
                         key_to_check = {"_id": jobs[i]["_id"]}
