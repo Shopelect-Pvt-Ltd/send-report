@@ -99,8 +99,7 @@ def uploadFile(filename):
         if os.path.exists(filename):
             os.remove(filename)
         return None
-
-def getData(wsname):
+def getData(tablename, wsname):
     logging.info("getData called...")
     filename = '_'.join(wsname) + "_" + str(currtime) + ".xlsx"
     total_records = 0
@@ -108,11 +107,13 @@ def getData(wsname):
     with pd.ExcelWriter(filename, engine='openpyxl') as writer:
         for i in range(len(wsname)):
             with pgconn.cursor() as cursor:
-                select_query = "SELECT * FROM mmt_flight_recon WHERE \"Customer_Name\" ILIKE %s"
+                select_query = f"SELECT * FROM {tablename} WHERE \"Workspace\" ILIKE %s"
                 logging.info("Query: " + str(select_query))
                 logging.info("Param: " + str(wsname[i]))
                 cursor.execute(select_query, (wsname[i],))
                 results = cursor.fetchall()
+                if results is None or len(results) == 0:
+                    continue
                 logging.info("No. of record: " + str(len(results)))
                 column_names = [desc[0] for desc in cursor.description]
 
@@ -158,6 +159,11 @@ def getWorkspaceName(workspaceids):
         return finalresult
 
 
+def removeFile(filename):
+    logging.info("removeFile called...")
+    if os.path.exists(filename):
+        os.remove(filename)
+
 def getPendingJob():
     logging.info("getPendingJob called...")
     db = client['gstservice']
@@ -179,11 +185,11 @@ if __name__ == '__main__':
         if jobs is not None and len(jobs) != 0:
             for i in range(len(jobs)):
                 logging.info("Processing for job: " + str(jobs[i]))
-                if "workspace_id" in jobs[i]:
+                if "workspace_id" in jobs[i] and "table_name" in jobs[i]:
                     workspacename = getWorkspaceName(jobs[i]['workspace_id'])
                     logging.info("Workspace Names: " + str(workspacename))
                     if workspacename is not None and len(workspacename) != 0:
-                        filename, count = getData(workspacename)
+                        filename, count = getData(jobs[i]['table_name'], workspacename)
                         logging.info("Filename: " + str(filename))
                         logging.info("Total no. of records: " + str(count))
                         if count != 0:
@@ -263,6 +269,7 @@ if __name__ == '__main__':
                                 logging.info("Updated the document: " + str(key_to_check))
                             else:
                                 logging.info("No updates for the document: " + str(key_to_check))
+                        removeFile(filename)
                     else:
                         key_to_check = {"_id": jobs[i]["_id"]}
                         result = collection.update_one(
@@ -282,7 +289,7 @@ if __name__ == '__main__':
                         key_to_check,
                         {
                             "$set": {
-                                "status": "WORKSPACE ID MISSING"
+                                "status": "WORKSPACE ID OR TABLE NAME MISSING"
                             }
                         })
                     if result.matched_count > 0:
