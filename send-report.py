@@ -236,7 +236,7 @@ if __name__ == '__main__':
                                 dynamic_template_data = {
                                     "subject": subject,
                                     "description": "As per your request we have generated this report of your workspace.",
-                                    "download_link": s3_url,
+                                    "download_link": "https://files.finkraft.ai/report-"+str(filehash),
                                 }
                                 template_id = "d-a6a5853662824aa7a69e990013cf1faa"
                                 to_emails = []
