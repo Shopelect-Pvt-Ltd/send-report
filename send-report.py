@@ -109,16 +109,29 @@ def findFileHash(file_path, hash_algo='sha256'):
     return hash_func.hexdigest()
 
 
-def getData(tablename, wsname):
+def getData(tablename, wsname, columnDefs):
     try:
         logging.info("getData called...")
         filename = '_'.join(wsname) + "_" + str(currtime) + ".xlsx"
         total_records = 0
+        column_query = ""
+        for i in range(len(columnDefs)):
+            if "hide" in columnDefs[i]:
+                column_query = column_query + '"' + columnDefs[i]["field"] + '" AS "' + columnDefs[i]["headerName"]+'"'
+                if i < len(columnDefs) - 1:
+                    column_query += ", "
+            elif "children" in columnDefs[i]:
+                for j in range(len(columnDefs[i]["children"])):
+                    column_query = column_query + '"' + columnDefs[i]["children"][j]["field"] + '" AS "' + columnDefs[i]["children"][j]["headerName"]+'"'
+                    if j < len(columnDefs[i]["children"]) - 1:
+                        column_query += ", "
+                if i < len(columnDefs) - 1:
+                    column_query += ", "
 
         with pd.ExcelWriter(filename, engine='openpyxl') as writer:
             for i in range(len(wsname)):
                 with pgconn.cursor() as cursor:
-                    select_query = f"SELECT * FROM {tablename} WHERE \"Workspace\" ILIKE %s"
+                    select_query = f"SELECT {column_query} FROM {tablename} WHERE \"Workspace\" ILIKE %s"
                     logging.info("Query: " + str(select_query))
                     logging.info("Param: " + str(wsname[i]))
                     cursor.execute(select_query, (wsname[i],))
@@ -127,15 +140,20 @@ def getData(tablename, wsname):
                         continue
                     logging.info("No. of record: " + str(len(results)))
                     column_names = [desc[0] for desc in cursor.description]
-
                 df = pd.DataFrame(results, columns=column_names)
 
-                # Convert columns to numeric datatype where possible
                 for col in df.columns:
-                    try:
-                        df[col] = pd.to_numeric(df[col])
-                    except ValueError:
-                        pass  # If conversion fails, keep the original data
+                    if isinstance(df[col], pd.Series):
+                        try:
+                            if pd.api.types.is_numeric_dtype(df[col]):
+                                continue  # Already numeric, no need to convert
+                            # Use pd.to_numeric and remove rows where conversion failed
+                            df[col] = pd.to_numeric(df[col])
+                        except ValueError:
+                            logging.warning(f"Skipping non-numeric column: {col}")
+                            continue
+                    else:
+                        logging.warning(f"Skipping column {col} as it is not a valid Series")
 
                 # Split data into chunks of 10,000 rows
                 for chunk_num, chunk in enumerate(range(0, len(df), 10000)):
@@ -188,6 +206,13 @@ def getPendingJob():
     result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
+def getSchema(moduleId):
+    logging.info("getSchema called...")
+    db = client['gstservice']
+    collection = db['AG_TABLE_SCHEMA']
+    result = collection.find_one({"moduleId": moduleId})
+    return result
+
 
 if __name__ == '__main__':
     try:
@@ -205,7 +230,26 @@ if __name__ == '__main__':
                     workspacename = getWorkspaceName(jobs[i]['workspace_id'])
                     logging.info("Workspace Names: " + str(workspacename))
                     if workspacename is not None and len(workspacename) != 0:
-                        filename, count, filehash = getData(jobs[i]['table_name'], workspacename)
+                        schemaDetails = getSchema(jobs[i]["moduleId"])
+                        logging.info("Schema Details: "+str(schemaDetails))
+                        if schemaDetails is None:
+                            key_to_check = {"_id": jobs[i]["_id"]}
+                            result = collection.update_one(
+                                key_to_check,
+                                {
+                                    "$set": {
+                                        "status": "SCHEMA DETAILS MISSING",
+                                        "total_record": 0
+                                    }
+                                })
+                            if result.matched_count > 0:
+                                logging.info("Updated the document: " + str(key_to_check))
+                            else:
+                                logging.info("No updates for the document: " + str(key_to_check))
+                            continue
+
+                        filename, count, filehash = getData(jobs[i]['table_name'], workspacename,
+                                                            schemaDetails["state"]["columnDefs"])
                         logging.info("Filename: " + str(filename))
                         logging.info("Total no. of records: " + str(count))
                         if count is None:
@@ -236,7 +280,7 @@ if __name__ == '__main__':
                                 dynamic_template_data = {
                                     "subject": subject,
                                     "description": "As per your request we have generated this report of your workspace.",
-                                    "download_link": "https://files.finkraft.ai/report-"+str(filehash),
+                                    "download_link": "https://files.finkraft.ai/report-" + str(filehash),
                                 }
                                 template_id = "d-a6a5853662824aa7a69e990013cf1faa"
                                 to_emails = []
