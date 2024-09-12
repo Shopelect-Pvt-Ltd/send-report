@@ -541,129 +541,129 @@ if __name__ == '__main__':
                                                             schemaDetails["state"]["columnDefs"],
                                                             schemaDetails["state"]["columnMapping"],
                                                             schemaDetails["name"], jobs[i]["createdBy"])
-                #         logging.info("Filename: " + str(filename))
-                #         logging.info("Total no. of records: " + str(count))
-                #         if count is None:
-                #             key_to_check = {"_id": jobs[i]["_id"]}
-                #             result = collection.update_one(
-                #                 key_to_check,
-                #                 {
-                #                     "$set": {
-                #                         "status": "EXCEPTION IN GETDATA",
-                #                         "total_record": 0
-                #                     }
-                #                 })
-                #             if result.matched_count > 0:
-                #                 logging.info("Updated the document: " + str(key_to_check))
-                #             else:
-                #                 logging.info("No updates for the document: " + str(key_to_check))
-                #
-                #         elif count != 0:
-                #             s3_url = uploadFile(filename)
-                #             logging.info("S3 URL: " + str(s3_url))
-                #             if s3_url is not None:
-                #                 subject = ""
-                #                 if "report_name" in jobs[i]:
-                #                     subject = subject + str(jobs[i]["report_name"]) + " is ready to download"
-                #                 else:
-                #                     subject = "Report ready to download"
-                #
-                #                 dynamic_template_data = {
-                #                     "subject": subject,
-                #                     "description": "As per your request we have generated this report of your workspace.",
-                #                     "download_link": "https://files.finkraft.ai/report-" + str(filehash),
-                #                 }
-                #                 template_id = "d-a6a5853662824aa7a69e990013cf1faa"
-                #                 to_emails = []
-                #                 if "to_emails" in jobs[i]:
-                #                     to_emails = jobs[i]["to_emails"]
-                #                 if len(to_emails) != 0:
-                #                     sendMailToClient(to_emails, template_id, dynamic_template_data)
-                #                     key_to_check = {"_id": jobs[i]["_id"]}
-                #                     result = collection.update_one(
-                #                         key_to_check,
-                #                         {
-                #                             "$set": {
-                #                                 "status": "COMPLETED",
-                #                                 "link": s3_url,
-                #                                 "total_record": count,
-                #                                 "filehash": filehash
-                #                             }
-                #                         })
-                #                     if result.matched_count > 0:
-                #                         logging.info("Updated the document: " + str(key_to_check))
-                #                     else:
-                #                         logging.info("No updates for the document: " + str(key_to_check))
-                #                 else:
-                #                     key_to_check = {"_id": jobs[i]["_id"]}
-                #                     result = collection.update_one(
-                #                         key_to_check,
-                #                         {
-                #                             "$set": {
-                #                                 "status": "TO MAIL MISSING",
-                #                                 "total_record": count
-                #                             }
-                #                         })
-                #                     if result.matched_count > 0:
-                #                         logging.info("Updated the document: " + str(key_to_check))
-                #                     else:
-                #                         logging.info("No updates for the document: " + str(key_to_check))
-                #             else:
-                #                 key_to_check = {"_id": jobs[i]["_id"]}
-                #                 result = collection.update_one(
-                #                     key_to_check,
-                #                     {
-                #                         "$set": {
-                #                             "status": "FAILED TO GENERATE LINK",
-                #                             "total_record": count
-                #                         }
-                #                     })
-                #                 if result.matched_count > 0:
-                #                     logging.info("Updated the document: " + str(key_to_check))
-                #                 else:
-                #                     logging.info("No updates for the document: " + str(key_to_check))
-                #         elif count == 0:
-                #             key_to_check = {"_id": jobs[i]["_id"]}
-                #             result = collection.update_one(
-                #                 key_to_check,
-                #                 {
-                #                     "$set": {
-                #                         "status": "COMPLETED",
-                #                         "total_record": count
-                #                     }
-                #                 })
-                #             if result.matched_count > 0:
-                #                 logging.info("Updated the document: " + str(key_to_check))
-                #             else:
-                #                 logging.info("No updates for the document: " + str(key_to_check))
-                #
-                #         removeFile(filename)
-                #     else:
-                #         key_to_check = {"_id": jobs[i]["_id"]}
-                #         result = collection.update_one(
-                #             key_to_check,
-                #             {
-                #                 "$set": {
-                #                     "status": "WORKSPACE NOT FOUND"
-                #                 }
-                #             })
-                #         if result.matched_count > 0:
-                #             logging.info("Updated the document: " + str(key_to_check))
-                #         else:
-                #             logging.info("No updates for the document: " + str(key_to_check))
-                # else:
-                #     key_to_check = {"_id": jobs[i]["_id"]}
-                #     result = collection.update_one(
-                #         key_to_check,
-                #         {
-                #             "$set": {
-                #                 "status": "WORKSPACE ID OR TABLE NAME MISSING"
-                #             }
-                #         })
-                #     if result.matched_count > 0:
-                #         logging.info("Updated the document: " + str(key_to_check))
-                #     else:
-                #         logging.info("No updates for the document: " + str(key_to_check))
+                        logging.info("Filename: " + str(filename))
+                        logging.info("Total no. of records: " + str(count))
+                        if count is None:
+                            key_to_check = {"_id": jobs[i]["_id"]}
+                            result = collection.update_one(
+                                key_to_check,
+                                {
+                                    "$set": {
+                                        "status": "EXCEPTION IN GETDATA",
+                                        "total_record": 0
+                                    }
+                                })
+                            if result.matched_count > 0:
+                                logging.info("Updated the document: " + str(key_to_check))
+                            else:
+                                logging.info("No updates for the document: " + str(key_to_check))
+
+                        elif count != 0:
+                            s3_url = uploadFile(filename)
+                            logging.info("S3 URL: " + str(s3_url))
+                            if s3_url is not None:
+                                subject = ""
+                                if "report_name" in jobs[i]:
+                                    subject = subject + str(jobs[i]["report_name"]) + " is ready to download"
+                                else:
+                                    subject = "Report ready to download"
+
+                                dynamic_template_data = {
+                                    "subject": subject,
+                                    "description": "As per your request we have generated this report of your workspace.",
+                                    "download_link": "https://files.finkraft.ai/report-" + str(filehash),
+                                }
+                                template_id = "d-a6a5853662824aa7a69e990013cf1faa"
+                                to_emails = []
+                                if "to_emails" in jobs[i]:
+                                    to_emails = jobs[i]["to_emails"]
+                                if len(to_emails) != 0:
+                                    sendMailToClient(to_emails, template_id, dynamic_template_data)
+                                    key_to_check = {"_id": jobs[i]["_id"]}
+                                    result = collection.update_one(
+                                        key_to_check,
+                                        {
+                                            "$set": {
+                                                "status": "COMPLETED",
+                                                "link": s3_url,
+                                                "total_record": count,
+                                                "filehash": filehash
+                                            }
+                                        })
+                                    if result.matched_count > 0:
+                                        logging.info("Updated the document: " + str(key_to_check))
+                                    else:
+                                        logging.info("No updates for the document: " + str(key_to_check))
+                                else:
+                                    key_to_check = {"_id": jobs[i]["_id"]}
+                                    result = collection.update_one(
+                                        key_to_check,
+                                        {
+                                            "$set": {
+                                                "status": "TO MAIL MISSING",
+                                                "total_record": count
+                                            }
+                                        })
+                                    if result.matched_count > 0:
+                                        logging.info("Updated the document: " + str(key_to_check))
+                                    else:
+                                        logging.info("No updates for the document: " + str(key_to_check))
+                            else:
+                                key_to_check = {"_id": jobs[i]["_id"]}
+                                result = collection.update_one(
+                                    key_to_check,
+                                    {
+                                        "$set": {
+                                            "status": "FAILED TO GENERATE LINK",
+                                            "total_record": count
+                                        }
+                                    })
+                                if result.matched_count > 0:
+                                    logging.info("Updated the document: " + str(key_to_check))
+                                else:
+                                    logging.info("No updates for the document: " + str(key_to_check))
+                        elif count == 0:
+                            key_to_check = {"_id": jobs[i]["_id"]}
+                            result = collection.update_one(
+                                key_to_check,
+                                {
+                                    "$set": {
+                                        "status": "COMPLETED",
+                                        "total_record": count
+                                    }
+                                })
+                            if result.matched_count > 0:
+                                logging.info("Updated the document: " + str(key_to_check))
+                            else:
+                                logging.info("No updates for the document: " + str(key_to_check))
+
+                        removeFile(filename)
+                    else:
+                        key_to_check = {"_id": jobs[i]["_id"]}
+                        result = collection.update_one(
+                            key_to_check,
+                            {
+                                "$set": {
+                                    "status": "WORKSPACE NOT FOUND"
+                                }
+                            })
+                        if result.matched_count > 0:
+                            logging.info("Updated the document: " + str(key_to_check))
+                        else:
+                            logging.info("No updates for the document: " + str(key_to_check))
+                else:
+                    key_to_check = {"_id": jobs[i]["_id"]}
+                    result = collection.update_one(
+                        key_to_check,
+                        {
+                            "$set": {
+                                "status": "WORKSPACE ID OR TABLE NAME MISSING"
+                            }
+                        })
+                    if result.matched_count > 0:
+                        logging.info("Updated the document: " + str(key_to_check))
+                    else:
+                        logging.info("No updates for the document: " + str(key_to_check))
         else:
             logging.info("No pending jobs")
         logging.info("======================================================")
