@@ -490,8 +490,8 @@ def getPendingJob():
     logging.info("getPendingJob called...")
     db = client['gstservice']
     collection = db['recon_report']
-    result = list(collection.find({"reportId": "414687f1-1aa5-4cdd-9166-8ebae1cfad7d"}).limit(LIMIT))
-    # result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
+    # result = list(collection.find({"reportId": "414687f1-1aa5-4cdd-9166-8ebae1cfad7d"}).limit(LIMIT))
+    result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
 
