@@ -300,6 +300,18 @@ if __name__ == '__main__':
         if jobs is not None and len(jobs) != 0:
             for i in range(len(jobs)):
                 logging.info("Processing for job: " + str(jobs[i]))
+                key_to_check = {"_id": jobs[i]["_id"]}
+                result = collection.update_one(
+                    key_to_check,
+                    {
+                        "$set": {
+                            "status": "IN PROGRESS",
+                        }
+                    })
+                if result.matched_count > 0:
+                    logging.info("Updated the document: " + str(key_to_check))
+                else:
+                    logging.info("No updates for the document: " + str(key_to_check))
                 folderDetails = getFolderGrouping(jobs[i]["groupingPayload"]["rowGroupCols"], jobs[i]["tableName"])
                 baseFolderName = 'download/invoice_folders'
                 if "report_name" in jobs[i]:
@@ -308,6 +320,7 @@ if __name__ == '__main__':
                 s3_url, filehash = getInovicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
                                                       jobs[i]["groupingPayload"]["rowGroupCols"],
                                                       jobs[i]["tableName"])
+
                 logging.info("S3 URL: " + str(s3_url))
                 if s3_url is not None:
                     subject = ""
