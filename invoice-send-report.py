@@ -3,9 +3,9 @@ from tendo import singleton
 import psycopg2
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 import logging
+from logging.handlers import TimedRotatingFileHandler
 from pymongo import MongoClient
 import boto3
 import requests
@@ -19,10 +19,24 @@ import shutil
 import hashlib
 
 ist = pytz.timezone('Asia/Kolkata')
+folder_path = "log/"
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
 
+log_handler = TimedRotatingFileHandler(
+    folder_path + 'invoice-report.log',  # Base file name (rotation will append numbers automatically)
+    when='D',  # Rotate by day
+    interval=1,  # Rotate every 1 day
+    backupCount=7,  # Keep only the last 7 log files
+    encoding='utf-8',
+    delay=False
+)
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(lineno)d - %(message)s')
+log_handler.setFormatter(formatter)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
+    handlers=[log_handler]
 )
 
 postgres_host = os.getenv("PG_HOST")
@@ -156,6 +170,7 @@ def fetch_base64_from_page(url):
 
 
 def download_base64_file(base64_string, file_path):
+    logging.info("Downloading the file: " + str(file_path))
     # Extract the MIME type and base64 data from the input string
     mime_info, base64_data = base64_string.split(',', 1)
 
@@ -170,6 +185,7 @@ def download_base64_file(base64_string, file_path):
 def downloadFile(baseFolderName, invoiceLinks, filePathArr):
     try:
         logging.info("downloadFile called...")
+        logging.info("No. of file to download: " + str(len(invoiceLinks)))
         for i in range(len(invoiceLinks)):
             url = invoiceLinks[i][0]
             base64_string = fetch_base64_from_page(url)
