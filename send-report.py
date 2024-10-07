@@ -429,6 +429,11 @@ def getData(tablename, wsname, columnDefs, columnMapping, schemaName, createdbyI
             if i < len(columnDefs) - 1 and columnadded == True:
                 column_query += ", "
 
+        if column_query.endswith(", "):
+            column_query = column_query[:-2]
+        elif column_query.endswith(","):
+            column_query = column_query[:-1]
+
         df = None
         for i in range(len(wsname)):
             with pgconn.cursor() as cursor:
@@ -491,6 +496,7 @@ def getPendingJob():
     db = client['gstservice']
     collection = db['recon_report']
     # result = list(collection.find({"reportId": "414687f1-1aa5-4cdd-9166-8ebae1cfad7d"}).limit(LIMIT))
+    # result = list(collection.find({"reportId": "514c176d-fddb-4c5b-ac2d-b51770635c64"}).limit(LIMIT))
     result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
