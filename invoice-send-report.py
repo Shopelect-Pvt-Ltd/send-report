@@ -195,10 +195,11 @@ def downloadFile(baseFolderName, invoiceLinks, filePathArr):
                 'image/png': '.png',
                 'image/jpeg': '.jpg',
                 'text/plain': '.txt',
+                'text/html':'.html',
                 'application/zip': '.zip',
             }
-            file_extension = mime_to_extension.get(mime_type, '.bin')
-
+            # file_extension = mime_to_extension.get(mime_type, '.bin')
+            file_extension = mime_to_extension.get(mime_type, '.pdf')
             filehash = url.split("/")[-1]
             filename = ""
             filepath = baseFolderName + "/"
@@ -218,6 +219,7 @@ def downloadFile(baseFolderName, invoiceLinks, filePathArr):
 
 def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalColumn, tableName):
     try:
+        totalfiles = 0
         logging.info("getInovicesDetails called...")
         for i in range(len(columnLinks)):
             linkColumn = columnLinks[i]
@@ -235,10 +237,11 @@ def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalCo
                     logging.info("Query: " + str(select_query))
                     cursor.execute(select_query)
                     results = cursor.fetchall()
+                    totalfiles += len(results)
                     downloadFile(baseFolderName, results, filePathArr)
 
         s3_link, filehash = zipHandler(baseFolderName)
-        return s3_link, filehash
+        return s3_link, filehash, totalfiles
     except Exception as e:
         logging.info("Exception happened in getInovicesDetails: " + str(e))
         return None, None
@@ -265,19 +268,43 @@ def createFolders(data, base_dir='download/invoice_folders'):
     return base_dir
 
 
-def getFolderGrouping(columnsDetails, tableName):
+def getFolderGrouping(columnsDetails, tableName, workspaces):
     logging.info("getFolderGrouping called...")
     columns = ""
     for i in range(len(columnsDetails)):
         columns += '"' + columnsDetails[i]["field"] + '"'
         if i < len(columnsDetails) - 1:
             columns += ","
+    workspcaeCondtion = ""
+    for i in range(len(workspaces)):
+        workspcaeCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
+        if i < len(workspaces) - 1:
+            workspcaeCondtion += " OR "
+
     with pgconn.cursor() as cursor:
-        select_query = f"SELECT {columns} FROM {tableName} GROUP BY ({columns})"
+        select_query = f"SELECT {columns} FROM {tableName} WHERE {workspcaeCondtion} GROUP BY ({columns})"
         logging.info("Query: " + str(select_query))
         cursor.execute(select_query)
         results = cursor.fetchall()
         return results
+
+
+def getWorkspcaeName(workspace_ids):
+    logging.info("getWorkspcaeName called...")
+    workspcae_condtion = "("
+    for i in range(len(workspace_ids)):
+        workspcae_condtion += "'" + workspace_ids[i] + "'"
+        if i < len(workspace_ids) - 1:
+            workspcae_condtion += ", "
+    workspcae_condtion += ")"
+
+    with pgconn.cursor() as cursor:
+        select_query = f"SELECT name FROM workspaces WHERE id IN {workspcae_condtion}"
+        logging.info("Query: " + str(select_query))
+        cursor.execute(select_query)
+        results = cursor.fetchall()
+        finalresult = [item[0] for item in results]
+        return finalresult
 
 
 def getPendingJob():
@@ -289,14 +316,35 @@ def getPendingJob():
     return result
 
 
+def removeOldFilesFolder():
+    logging.info("removeOldFilesFolder called...")
+    folder_path = 'download/'
+
+    if os.path.exists(folder_path):
+        for item in os.listdir(folder_path):
+            item_path = os.path.join(folder_path, item)
+
+            if os.path.isfile(item_path):
+                os.remove(item_path)
+                logging.info(f"File removed: {item_path}")
+
+            elif os.path.isdir(item_path):
+                shutil.rmtree(item_path)
+                logging.info(f"Folder removed: {item_path}")
+
+        logging.info("All files and folders deleted.")
+    else:
+        print("The specified folder does not exist.")
+
+
 if __name__ == '__main__':
     try:
         me = singleton.SingleInstance()
         logging.info("======================================================")
+        removeOldFilesFolder()
         jobs = getPendingJob()
         db = client['gstservice']
         collection = db['invoice_report']
-
         if jobs is not None and len(jobs) != 0:
             for i in range(len(jobs)):
                 logging.info("Processing for job: " + str(jobs[i]))
@@ -312,14 +360,33 @@ if __name__ == '__main__':
                     logging.info("Updated the document: " + str(key_to_check))
                 else:
                     logging.info("No updates for the document: " + str(key_to_check))
-                folderDetails = getFolderGrouping(jobs[i]["groupingPayload"]["rowGroupCols"], jobs[i]["tableName"])
+
+                workspcaes = getWorkspcaeName(jobs[i]["workspace_id"])
+                folderDetails = getFolderGrouping(jobs[i]["groupingPayload"]["rowGroupCols"], jobs[i]["tableName"],
+                                                  workspcaes)
+                if len(folderDetails) <= 0:
+                    result = collection.update_one(
+                        key_to_check,
+                        {
+                            "$set": {
+                                "status": "COMPLETED",
+                                "remark": "No file found",
+                                "totalfiles": 0
+                            }
+                        })
+                    if result.matched_count > 0:
+                        logging.info("Updated the document: " + str(key_to_check))
+                    else:
+                        logging.info("No updates for the document: " + str(key_to_check))
+                    continue
+
                 baseFolderName = 'download/invoice_folders'
                 if "report_name" in jobs[i]:
                     baseFolderName = 'download/' + str(jobs[i]["report_name"])
                 createFolders(folderDetails, baseFolderName)
-                s3_url, filehash = getInovicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
-                                                      jobs[i]["groupingPayload"]["rowGroupCols"],
-                                                      jobs[i]["tableName"])
+                s3_url, filehash, totalfiles = getInovicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
+                                                                  jobs[i]["groupingPayload"]["rowGroupCols"],
+                                                                  jobs[i]["tableName"])
 
                 logging.info("S3 URL: " + str(s3_url))
                 if s3_url is not None:
@@ -347,7 +414,8 @@ if __name__ == '__main__':
                                 "$set": {
                                     "status": "COMPLETED",
                                     "link": s3_url,
-                                    "filehash": filehash
+                                    "filehash": filehash,
+                                    "totalfiles": totalfiles
                                 }
                             })
                         if result.matched_count > 0:
@@ -362,7 +430,8 @@ if __name__ == '__main__':
                                 "$set": {
                                     "status": "COMPLETED MAIL MISSING",
                                     "link": s3_url,
-                                    "filehash": filehash
+                                    "filehash": filehash,
+                                    "totalfiles": totalfiles
                                 }
                             })
                         if result.matched_count > 0:
