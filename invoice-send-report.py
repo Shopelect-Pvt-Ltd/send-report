@@ -218,40 +218,49 @@ def downloadFile(baseFolderName, invoiceLinks, filePathArr):
         logging.info("Exception happened in downloadFile: " + str(e))
 
 
-def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalColumn, tableName,workspaces):
+def getInvoicesDetails(baseFolderName, folderDetails, columnLinks, conditionalColumn, tableName, workspaces):
     try:
+        logging.info("getInvoicesDetails called...")
         totalfiles = 0
-        logging.info("getInovicesDetails called...")
-
-        workspcaeCondtion = ""
+        workspaceCondtion = ""
         for i in range(len(workspaces)):
-            workspcaeCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
+            workspaceCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
             if i < len(workspaces) - 1:
-                workspcaeCondtion += " OR "
+                workspaceCondtion += " OR "
 
         for i in range(len(columnLinks)):
             linkColumn = columnLinks[i]
-            for j in range(len(folderDetails)):
-                columnCondition = ""
-                filePathArr = []
-                for k in range(len(folderDetails[j])):
-                    columnCondition += '"' + conditionalColumn[k]["field"] + '"' + "='" + folderDetails[j][k] + "'"
-                    filePathArr.append(folderDetails[j][k])
-                    if k < len(folderDetails[j]) - 1:
-                        columnCondition += " AND "
+            if len(folderDetails)!=0:
+                for j in range(len(folderDetails)):
+                    columnCondition = ""
+                    filePathArr = []
+                    for k in range(len(folderDetails[j])):
+                        columnCondition += '"' + conditionalColumn[k]["field"] + '"' + "='" + folderDetails[j][k] + "'"
+                        filePathArr.append(folderDetails[j][k])
+                        if k < len(folderDetails[j]) - 1:
+                            columnCondition += " AND "
 
+                    with pgconn.cursor() as cursor:
+                        select_query = f'SELECT "{linkColumn}" FROM {tableName} WHERE  {workspaceCondtion} AND "{linkColumn}" IS NOT NULL AND {columnCondition}'
+                        logging.info("Query: " + str(select_query))
+                        cursor.execute(select_query)
+                        results = cursor.fetchall()
+                        totalfiles += len(results)
+                        downloadFile(baseFolderName, results, filePathArr)
+            else:
                 with pgconn.cursor() as cursor:
-                    select_query = f'SELECT "{linkColumn}" FROM {tableName} WHERE  {workspcaeCondtion} AND "{linkColumn}" IS NOT NULL AND {columnCondition}'
+                    select_query = f'SELECT "{linkColumn}" FROM {tableName} WHERE  {workspaceCondtion} AND "{linkColumn}" IS NOT NULL'
                     logging.info("Query: " + str(select_query))
                     cursor.execute(select_query)
                     results = cursor.fetchall()
                     totalfiles += len(results)
+                    filePathArr=[]
                     downloadFile(baseFolderName, results, filePathArr)
 
         s3_link, filehash = zipHandler(baseFolderName)
         return s3_link, filehash, totalfiles
     except Exception as e:
-        logging.info("Exception happened in getInovicesDetails: " + str(e))
+        logging.info("Exception happened in getInvoicesDetails: " + str(e))
         return None, None
 
 
@@ -277,24 +286,28 @@ def createFolders(data, base_dir='download/invoice_folders_'+str(currtime)):
 
 
 def getFolderGrouping(columnsDetails, tableName, workspaces):
-    logging.info("getFolderGrouping called...")
-    columns = ""
-    for i in range(len(columnsDetails)):
-        columns += '"' + columnsDetails[i]["field"] + '"'
-        if i < len(columnsDetails) - 1:
-            columns += ","
-    workspcaeCondtion = ""
-    for i in range(len(workspaces)):
-        workspcaeCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
-        if i < len(workspaces) - 1:
-            workspcaeCondtion += " OR "
-
-    with pgconn.cursor() as cursor:
-        select_query = f"SELECT {columns} FROM {tableName} WHERE {workspcaeCondtion} GROUP BY ({columns})"
-        logging.info("Query: " + str(select_query))
-        cursor.execute(select_query)
-        results = cursor.fetchall()
-        return results
+    try:
+        logging.info("getFolderGrouping called...")
+        columns = ""
+        for i in range(len(columnsDetails)):
+            columns += '"' + columnsDetails[i]["field"] + '"'
+            if i < len(columnsDetails) - 1:
+                columns += ","
+        workspaceCondtion = ""
+        for i in range(len(workspaces)):
+            workspaceCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
+            if i < len(workspaces) - 1:
+                workspaceCondtion += " OR "
+        results =[]
+        with pgconn.cursor() as cursor:
+            select_query = f"SELECT {columns} FROM {tableName} WHERE {workspaceCondtion} GROUP BY ({columns})"
+            logging.info("Query: " + str(select_query))
+            cursor.execute(select_query)
+            results = cursor.fetchall()
+            return results
+    except Exception as e:
+        logging.info("Exception happen in getFolderGrouping:  "+str(e))
+        return []
 
 
 def getWorkspcaeName(workspace_ids):
@@ -319,7 +332,7 @@ def getPendingJob():
     logging.info("getPendingJob called...")
     db = client['gstservice']
     collection = db['invoice_report']
-    # result = list(collection.find({"reportId": "5dbd5a8e-ca78-45b0-9c60-5d45017ddfc1"}).limit(LIMIT))
+    # result = list(collection.find({"reportId": "00d4bf77-df93-41be-a0db-70f3f54c847a"}).limit(LIMIT))
     result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
@@ -342,8 +355,15 @@ def removeOldFilesFolder():
 
         logging.info("All files and folders deleted.")
     else:
-        print("The specified folder does not exist.")
+        logging.info("The specified folder does not exist.")
 
+
+def statusUpdater(key_to_check,update):
+    result = collection.update_one(key_to_check,update)
+    if result.matched_count > 0:
+        logging.info("Updated the document: " + str(key_to_check)+" Update: "+str(update))
+    else:
+        logging.info("No updates for the document: " + str(key_to_check)+" Update: "+str(update))
 
 if __name__ == '__main__':
     try:
@@ -357,44 +377,50 @@ if __name__ == '__main__':
             for i in range(len(jobs)):
                 logging.info("Processing for job: " + str(jobs[i]))
                 key_to_check = {"_id": jobs[i]["_id"]}
-                result = collection.update_one(
-                    key_to_check,
-                    {
+                update={
+                    "$set":
+                             {
+                                 "status": "IN PROGRESS"
+                             }
+                    }
+                statusUpdater(key_to_check, update)
+
+                if len(jobs[i]["workspace_id"])==0:
+                    key_to_check = {"_id": jobs[i]["_id"]}
+                    update={
                         "$set": {
-                            "status": "IN PROGRESS",
+                                "status": "No workspace found",
+                            }
                         }
-                    })
-                if result.matched_count > 0:
-                    logging.info("Updated the document: " + str(key_to_check))
-                else:
-                    logging.info("No updates for the document: " + str(key_to_check))
+                    statusUpdater(key_to_check, update)
+                    continue
 
                 workspcaes = getWorkspcaeName(jobs[i]["workspace_id"])
-                folderDetails = getFolderGrouping(jobs[i]["groupingPayload"]["rowGroupCols"], jobs[i]["tableName"],
-                                                  workspcaes)
-                if len(folderDetails) <= 0:
-                    result = collection.update_one(
-                        key_to_check,
-                        {
-                            "$set": {
-                                "status": "COMPLETED",
-                                "remark": "No file found",
-                                "totalfiles": 0
+                if len(workspcaes)==0:
+                    key_to_check = {"_id": jobs[i]["_id"]}
+                    update={
+                        "$set": {
+                                "status": "No workspace found",
                             }
-                        })
-                    if result.matched_count > 0:
-                        logging.info("Updated the document: " + str(key_to_check))
-                    else:
-                        logging.info("No updates for the document: " + str(key_to_check))
+                        }
+                    statusUpdater(key_to_check, update)
                     continue
+
+                if len(jobs[i]["groupingPayload"]["rowGroupCols"])!=0:
+                    folderDetails = getFolderGrouping(jobs[i]["groupingPayload"]["rowGroupCols"], jobs[i]["tableName"],
+                                                      workspcaes)
+                else:
+                    folderDetails=[]
 
                 baseFolderName = 'download/invoice_folders_'+str(currtime)
                 if "report_name" in jobs[i]:
                     baseFolderName = 'download/' + str(jobs[i]["report_name"])
+
                 createFolders(folderDetails, baseFolderName)
-                s3_url, filehash, totalfiles = getInovicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
+
+                s3_url, filehash, totalfiles = getInvoicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
                                                                   jobs[i]["groupingPayload"]["rowGroupCols"],
-                                                                  jobs[i]["tableName"],workspcaes)
+                                                                  jobs[i]["tableName"], workspcaes)
 
                 logging.info("S3 URL: " + str(s3_url))
                 if s3_url is not None:
@@ -416,50 +442,34 @@ if __name__ == '__main__':
                     if len(to_emails) != 0:
                         sendMailToClient(to_emails, template_id, dynamic_template_data)
                         key_to_check = {"_id": jobs[i]["_id"]}
-                        result = collection.update_one(
-                            key_to_check,
-                            {
+                        update = {
                                 "$set": {
                                     "status": "COMPLETED",
                                     "link": s3_url,
                                     "filehash": filehash,
                                     "totalfiles": totalfiles
                                 }
-                            })
-                        if result.matched_count > 0:
-                            logging.info("Updated the document: " + str(key_to_check))
-                        else:
-                            logging.info("No updates for the document: " + str(key_to_check))
+                            }
+                        statusUpdater(key_to_check, update)
                     else:
                         key_to_check = {"_id": jobs[i]["_id"]}
-                        result = collection.update_one(
-                            key_to_check,
-                            {
+                        update = {
                                 "$set": {
                                     "status": "COMPLETED MAIL MISSING",
                                     "link": s3_url,
                                     "filehash": filehash,
                                     "totalfiles": totalfiles
                                 }
-                            })
-                        if result.matched_count > 0:
-                            logging.info("Updated the document: " + str(key_to_check))
-                        else:
-                            logging.info("No updates for the document: " + str(key_to_check))
+                            }
+                        statusUpdater(key_to_check, update)
                 else:
                     key_to_check = {"_id": jobs[i]["_id"]}
-                    result = collection.update_one(
-                        key_to_check,
-                        {
+                    update = {
                             "$set": {
                                 "status": "FAILED",
                             }
-                        })
-                    if result.matched_count > 0:
-                        logging.info("Updated the document: " + str(key_to_check))
-                    else:
-                        logging.info("No updates for the document: " + str(key_to_check))
-
+                        }
+                    statusUpdater(key_to_check, update)
         else:
             logging.info("No pending jobs")
 
