@@ -18,6 +18,7 @@ from bs4 import BeautifulSoup
 import shutil
 import hashlib
 
+
 ist = pytz.timezone('Asia/Kolkata')
 folder_path = "log/"
 if not os.path.exists(folder_path):
@@ -247,7 +248,7 @@ def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalCo
         return None, None
 
 
-def createFolders(data, base_dir='download/invoice_folders'):
+def createFolders(data, base_dir='download/invoice_folders_'+str(currtime)):
     logging.info("createFolders called...")
     # Create the base directory if it doesn't exist
     if not os.path.exists(base_dir):
@@ -380,7 +381,7 @@ if __name__ == '__main__':
                         logging.info("No updates for the document: " + str(key_to_check))
                     continue
 
-                baseFolderName = 'download/invoice_folders'
+                baseFolderName = 'download/invoice_folders_'+str(currtime)
                 if "report_name" in jobs[i]:
                     baseFolderName = 'download/' + str(jobs[i]["report_name"])
                 createFolders(folderDetails, baseFolderName)
