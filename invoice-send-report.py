@@ -218,10 +218,17 @@ def downloadFile(baseFolderName, invoiceLinks, filePathArr):
         logging.info("Exception happened in downloadFile: " + str(e))
 
 
-def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalColumn, tableName):
+def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalColumn, tableName,workspaces):
     try:
         totalfiles = 0
         logging.info("getInovicesDetails called...")
+
+        workspcaeCondtion = ""
+        for i in range(len(workspaces)):
+            workspcaeCondtion += '"Workspace"' + " ILIKE " + "'%" + workspaces[i] + "%'"
+            if i < len(workspaces) - 1:
+                workspcaeCondtion += " OR "
+
         for i in range(len(columnLinks)):
             linkColumn = columnLinks[i]
             for j in range(len(folderDetails)):
@@ -234,7 +241,7 @@ def getInovicesDetails(baseFolderName, folderDetails, columnLinks, conditionalCo
                         columnCondition += " AND "
 
                 with pgconn.cursor() as cursor:
-                    select_query = f'SELECT "{linkColumn}" FROM {tableName} WHERE "{linkColumn}" IS NOT NULL AND {columnCondition}'
+                    select_query = f'SELECT "{linkColumn}" FROM {tableName} WHERE  {workspcaeCondtion} AND "{linkColumn}" IS NOT NULL AND {columnCondition}'
                     logging.info("Query: " + str(select_query))
                     cursor.execute(select_query)
                     results = cursor.fetchall()
@@ -312,7 +319,7 @@ def getPendingJob():
     logging.info("getPendingJob called...")
     db = client['gstservice']
     collection = db['invoice_report']
-    # result = list(collection.find({"reportId": "5a5bf10e-6b47-4474-a96b-fbcbe6b4b5bc"}).limit(LIMIT))
+    # result = list(collection.find({"reportId": "5dbd5a8e-ca78-45b0-9c60-5d45017ddfc1"}).limit(LIMIT))
     result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
@@ -387,7 +394,7 @@ if __name__ == '__main__':
                 createFolders(folderDetails, baseFolderName)
                 s3_url, filehash, totalfiles = getInovicesDetails(baseFolderName, folderDetails, jobs[i]["columnLinks"],
                                                                   jobs[i]["groupingPayload"]["rowGroupCols"],
-                                                                  jobs[i]["tableName"])
+                                                                  jobs[i]["tableName"],workspcaes)
 
                 logging.info("S3 URL: " + str(s3_url))
                 if s3_url is not None:
