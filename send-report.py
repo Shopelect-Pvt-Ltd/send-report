@@ -437,7 +437,11 @@ def getData(tablename, wsname, columnDefs, columnMapping, schemaName, createdbyI
         df = None
         for i in range(len(wsname)):
             with pgconn.cursor() as cursor:
-                select_query = f"SELECT {column_query} FROM {tablename} WHERE \"Workspace\" ILIKE %s"
+                if "admin" in wsname[i].lower():
+                    select_query = f"SELECT {column_query} FROM {tablename}"
+                else:
+                    select_query = f"SELECT {column_query} FROM {tablename} WHERE \"Workspace\" ILIKE %s"
+
                 logging.info("Query: " + str(select_query))
                 logging.info("Param: " + str(wsname[i]))
                 cursor.execute(select_query, (wsname[i],))
@@ -449,7 +453,8 @@ def getData(tablename, wsname, columnDefs, columnMapping, schemaName, createdbyI
             df_temp = pd.DataFrame(results, columns=column_names)
             df = pd.concat([df, df_temp], ignore_index=True)
 
-        header_details = []
+        if df is None:
+            return None,0,None
 
         for key, val in header_details_map.items():
             count = 0
