@@ -11,21 +11,33 @@ from pymongo import MongoClient
 import boto3
 import requests
 from sendgrid.helpers.mail import Mail
-# from openpyxl.styles import Font, PatternFill,Alignment
 from openpyxl.styles import Border, Side, Font, Alignment, PatternFill
 import hashlib
-from openpyxl.worksheet.hyperlink import Hyperlink
-from openpyxl import Workbook
 from openpyxl.drawing.image import Image
 from datetime import datetime
 import pytz
 from openpyxl.styles import NamedStyle
+from logging.handlers import TimedRotatingFileHandler
 
 ist = pytz.timezone('Asia/Kolkata')
+folder_path = "log/"
+if not os.path.exists(folder_path):
+    os.makedirs(folder_path)
 
+log_handler = TimedRotatingFileHandler(
+    folder_path + 'send-report.log',  # Base file name (rotation will append numbers automatically)
+    when='D',  # Rotate by day
+    interval=1,  # Rotate every 1 day
+    backupCount=7,  # Keep only the last 7 log files
+    encoding='utf-8',
+    delay=False
+)
+
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(lineno)d - %(message)s')
+log_handler.setFormatter(formatter)
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(lineno)d - %(message)s'
+    handlers=[log_handler]
 )
 
 postgres_host = os.getenv("PG_HOST")
