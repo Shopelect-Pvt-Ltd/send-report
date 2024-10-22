@@ -333,7 +333,7 @@ def getPendingJob():
     db = client['gstservice']
     collection = db['invoice_report']
     # result = list(collection.find({"reportId": "00d4bf77-df93-41be-a0db-70f3f54c847a"}).limit(LIMIT))
-    result = list(collection.find({"status": "PENDING"}).sort({"createdBy": -1}).limit(LIMIT))
+    result = list(collection.find({"status": "PENDING","$ne": "mongodb"}).sort({"createdBy": -1}).limit(LIMIT))
     return result
 
 
