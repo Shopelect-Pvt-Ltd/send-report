@@ -8,9 +8,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from pymongo import MongoClient
 import boto3
-import requests
 from sendgrid.helpers.mail import Mail
-from datetime import datetime
 import pytz
 import base64
 import requests
@@ -261,7 +259,7 @@ def getInvoicesDetails(baseFolderName, folderDetails, columnLinks, conditionalCo
         return s3_link, filehash, totalfiles
     except Exception as e:
         logging.info("Exception happened in getInvoicesDetails: " + str(e))
-        return None, None
+        return None, None, None
 
 
 def createFolders(data, base_dir='download/invoice_folders_'+str(currtime)):
